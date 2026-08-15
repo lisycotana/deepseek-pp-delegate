@@ -229,6 +229,7 @@ import {
   uploadDeepSeekFile,
 } from '../core/deepseek/adapter';
 import { createDeepSeekAutomationClient } from '../core/deepseek/active-client';
+import { createDelegateController } from './background/delegate-controller';
 import { submitOfficialDeepSeekStreaming } from '../core/deepseek/official-api';
 import { createDeepSeekConversationExportTransport } from '../core/deepseek/conversation-export';
 import {
@@ -300,8 +301,7 @@ const REFRESH_AUTH_MESSAGE = { type: 'REFRESH_DEEPSEEK_AUTH' } as const;
 const AUTOMATION_AUTH_TOKEN_MISSING_MESSAGE =
   'DeepSeek login token is missing. Refresh chat.deepseek.com or sign in again, then retry the automation.';
 const deepSeekAutomationClient = createDeepSeekAutomationClient();
-const externalPayloadAuthorizationCache = new ExternalPayloadAuthorizationCache();
-const {
+const externalPayloadAuthorizationCache = new ExternalPayloadAuthorizationCache();const {
   executeToolCall: executeRuntimeToolCall,
   getAuthorizationDescriptors: getRuntimeAuthorizationDescriptors,
   getToolDescriptors: getRuntimeToolDescriptors,
@@ -669,6 +669,23 @@ const runtimeCommandRegistry = createRuntimeCommandRegistry({
         addCustomScenario,
         deleteScenario,
         refreshScenarioMenus: createContextMenus,
+      },
+      delegate: {
+        delegateController: createDelegateController({
+          deepSeekClient: deepSeekAutomationClient,
+          loadClientHeaders: () => loadOrRefreshClientHeaders(),
+          getToolDescriptors: (locale: string) => getRuntimeToolDescriptors(locale as 'en' | 'zh-CN'),
+          executeToolCall: (call, options) => executeBackgroundRuntimeToolCall(
+            call,
+            'automation',
+            {
+              signal: options.signal,
+              idempotencyKey: options.idempotencyKey,
+              assertActive: () => undefined,
+              trustedCapabilityScopeId: `delegate:${options.idempotencyKey}`,
+            },
+          ),
+        }),
       },
     }),
   ],

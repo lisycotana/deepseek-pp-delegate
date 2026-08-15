@@ -30,6 +30,9 @@ const R44_COMMANDS = [
   'SET_AUTOMATION_STATUS',
   'DELETE_AUTOMATION',
   'RUN_AUTOMATION_NOW',
+  'START_DELEGATE',
+  'STOP_DELEGATE',
+  'GET_DELEGATE_STATUS',
   'SCENARIOS_UPDATED',
 ] as const;
 
@@ -47,6 +50,9 @@ const R44_PAYLOAD_COMMANDS = [
   'SET_AUTOMATION_STATUS',
   'DELETE_AUTOMATION',
   'RUN_AUTOMATION_NOW',
+  'START_DELEGATE',
+  'STOP_DELEGATE',
+  'GET_DELEGATE_STATUS',
   'SCENARIOS_UPDATED',
 ] as const;
 
@@ -60,7 +66,7 @@ const context: RuntimeMessageContext = {
 };
 
 describe('R4.4 background runtime closure', () => {
-  it('owns exactly the final 17 handlers and 14 receiving decoders', () => {
+  it('owns exactly the final 20 handlers and 17 receiving decoders', () => {
     const handlers = createBackgroundRuntimeHandlers(createDependencies());
     expect(handlers.map((handler) => handler.type).sort()).toEqual([...R44_COMMANDS].sort());
     expect(Object.keys(BACKGROUND_RUNTIME_PAYLOAD_DECODERS).sort())
@@ -277,6 +283,13 @@ function createDependencies(): BackgroundRuntimeHandlerDependencies {
       })),
       deleteScenario: vi.fn(async () => undefined),
       refreshScenarioMenus: vi.fn(async () => undefined),
+    },
+    delegate: {
+      delegateController: {
+        start: vi.fn(() => ({ ok: true as const, runId: 'test-run' })),
+        stop: vi.fn(async () => undefined),
+        getStatus: vi.fn(() => ({ running: false, tasksCompleted: 0 })),
+      },
     },
   };
 }

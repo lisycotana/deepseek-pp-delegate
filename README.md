@@ -2,7 +2,13 @@
   <img src="assets/readme-header.png" width="860" alt="DeepSeek++ DeepSeek 浏览器插件和 AI Agent 工作台">
 </p>
 
-<h1 align="center">DeepSeek++</h1>
+<h1 align="center">DeepSeek++ (fork: delegate mode)</h1>
+
+> **This is a fork** of [zhu1090093659/deepseek-pp](https://github.com/zhu1090093659/deepseek-pp) that adds **delegate mode**: each task claimed from DeepSeek Harness runs in a fresh DS chat session that is deleted when the task settles, so task contexts never bleed and the sidebar never accumulates spent conversations.
+>
+> See [`docs/delegate.md`](docs/delegate.md) for the design. The rest of this README is the upstream documentation, unchanged.
+>
+> This fork is part of [dsh-deepseek-web-bridge](..) — the browser side of a bridge that lets a DeepSeek web session do subagent work for DeepSeek Harness without spending API quota.
 
 <p align="center">
   <strong>DeepSeek++：把 DeepSeek 网页版扩展成支持中英文体验、记忆、项目、Skill、MCP、多模态媒体、浏览器控制、保存项、产物下载、对话导出和自动化的 AI Agent 工作台</strong>

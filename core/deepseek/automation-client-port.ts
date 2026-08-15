@@ -38,6 +38,11 @@ export interface DeepSeekAutomationClient {
     clientHeaders: Record<string, string>,
     context: DeepSeekRequestContext,
   ): Promise<string>;
+  deleteChatSession(
+    chatSessionId: string,
+    clientHeaders: Record<string, string>,
+    context: DeepSeekRequestContext,
+  ): Promise<void>;
   createPowHeaders(
     clientHeaders: Record<string, string>,
     context: DeepSeekRequestContext,

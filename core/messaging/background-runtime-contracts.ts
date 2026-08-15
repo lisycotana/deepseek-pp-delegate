@@ -128,6 +128,18 @@ export interface BackgroundRuntimeCommandContracts {
     request: { type: 'RUN_AUTOMATION_NOW'; payload: { id: string } };
     response: AutomationRun | DomainFailure;
   };
+  START_DELEGATE: {
+    request: { type: 'START_DELEGATE'; payload?: { maxTasks?: number } };
+    response: { ok: true; runId: string } | { ok: false; error: string };
+  };
+  STOP_DELEGATE: {
+    request: { type: 'STOP_DELEGATE' };
+    response: Ack;
+  };
+  GET_DELEGATE_STATUS: {
+    request: { type: 'GET_DELEGATE_STATUS' };
+    response: { running: boolean; runId?: string; tasksCompleted: number; lastError?: string };
+  };
   SCENARIOS_UPDATED: {
     request: { type: 'SCENARIOS_UPDATED'; payload?: ScenarioRuntimeRequest };
     response: Ack | { ok: true; scenarios: ScenarioConfig[] };

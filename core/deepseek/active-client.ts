@@ -36,6 +36,7 @@ import {
   encodeDeepSeekRouteRequest,
   encodeCompletionRequest,
   encodeCreateSessionRequest,
+  encodeDeleteSessionRequest,
   encodeHistoryRequest,
   encodePowChallengeRequest,
   normalizeDeepSeekMessageId,
@@ -122,6 +123,8 @@ export function createDeepSeekAutomationClient(
     createClientHeaders,
     createChatSession: (clientHeaders, context) =>
       createChatSessionWithContext(clientHeaders, withDependencies(context)),
+    deleteChatSession: (chatSessionId, clientHeaders, context) =>
+      deleteChatSessionWithContext(chatSessionId, clientHeaders, withDependencies(context)),
     createPowHeaders: (clientHeaders, context) =>
       createPowHeadersForPathWithContext(
         clientHeaders,
@@ -172,6 +175,44 @@ async function createChatSessionWithContext(
   }
 
   return chatSessionId;
+}
+
+async function deleteChatSessionWithContext(
+  chatSessionId: string,
+  clientHeaders: Record<string, string>,
+  context: DeepSeekRequestContext,
+): Promise<void> {
+  // Deletion is best-effort by design. A session that is already gone (deleted
+  // elsewhere, or a stale id after a retry) returns an error from the server,
+  // but the caller's intent — "this conversation should not persist" — is
+  // already satisfied. Surfacing a hard error here would turn cleanup into a
+  // failure path that aborts the next task, which is worse than a leaked empty
+  // session the user can clear later.
+  try {
+    const response = await requestDeepSeek(
+      encodeDeleteSessionRequest(chatSessionId, clientHeaders),
+      'DeepSeek chat session delete',
+      'session',
+      context,
+    );
+    const json = await readJsonResponse(response, 'DeepSeek chat session delete', 'session');
+    const data = json?.data;
+    if (isAuthBizError(data, json)) {
+      throw new DeepSeekAuthError(
+        `DeepSeek auth token was rejected while deleting chat session: ${JSON.stringify(data ?? json)}`,
+      );
+    }
+    if (!response.ok || data?.biz_code !== 0) {
+      // A 404 or a biz_code mismatch for a missing session is the cleanup
+      // outcome we want; only an auth failure above is re-raised.
+      return;
+    }
+  } catch (err) {
+    if (err instanceof DeepSeekAuthError) throw err;
+    // Network or parse failure during cleanup: log and continue. The task is
+    // already settled; a dangling empty session is recoverable by the user.
+    return;
+  }
 }
 
 export async function createPowHeaders(

@@ -18,6 +18,7 @@ import { runDeepSeekAutomation, type AutomationRunnerOptions } from '../core/aut
 
 const adapterMocks = vi.hoisted(() => ({
   createChatSession: vi.fn(),
+  deleteChatSession: vi.fn(),
   createPowHeaders: vi.fn(),
   readHistorySnapshot: vi.fn(),
   submitPrompt: vi.fn(),
@@ -26,6 +27,7 @@ const adapterMocks = vi.hoisted(() => ({
 const deepSeekClient: DeepSeekAutomationClient = {
   createClientHeaders: () => ({ Authorization: 'Bearer test-token' }),
   createChatSession: adapterMocks.createChatSession,
+  deleteChatSession: adapterMocks.deleteChatSession,
   createPowHeaders: adapterMocks.createPowHeaders,
   submitPrompt: adapterMocks.submitPrompt,
   readHistorySnapshot: adapterMocks.readHistorySnapshot,

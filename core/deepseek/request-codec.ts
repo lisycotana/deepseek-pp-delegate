@@ -33,6 +33,7 @@ export const DEEPSEEK_WEB_ROUTE_POLICY = {
   editMessage: { route: 'editMessage', method: 'POST' },
   regenerate: { route: 'regenerate', method: 'POST' },
   createSession: { route: 'createSession', method: 'POST' },
+  deleteSession: { route: 'deleteSession', method: 'POST' },
   powChallenge: { route: 'powChallenge', method: 'POST' },
   history: { route: 'history', method: 'GET' },
   uploadFile: { route: 'uploadFile', method: 'POST' },
@@ -129,6 +130,17 @@ export function encodeCreateSessionRequest(
     credentials: 'include',
     headers: { 'content-type': 'application/json', ...clientHeaders },
     body: JSON.stringify({}),
+  });
+}
+
+export function encodeDeleteSessionRequest(
+  chatSessionId: string,
+  clientHeaders: Record<string, string>,
+): EncodedDeepSeekRequest {
+  return encodeDeepSeekRouteRequest('deleteSession', {
+    credentials: 'include',
+    headers: { 'content-type': 'application/json', ...clientHeaders },
+    body: JSON.stringify({ chat_session_id: chatSessionId }),
   });
 }
 

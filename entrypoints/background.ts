@@ -756,14 +756,17 @@ export default defineBackground(() => {
       .catch((error) => reportBackgroundStartupError('automation_startup_scan_failed', error)))
     .catch(acknowledgeReportedSyncRecoveryFailure);
 
-  // Auto-start the delegate loop on SW wake. The loop idles patiently (claim
-  // blocks server-side) when no work is queued, so starting it unconditionally
+  // Auto-start the delegate loop after SW init settles. Deferring avoids
+  // racing tool-descriptor loading on the critical startup path. The loop idles
+  // patiently (claim blocks server-side) when no work is queued, so starting it
   // costs nothing when idle. When the SW is killed and wakes again, this
   // re-starts the loop automatically — no manual button press needed.
-  const delegateStart = delegateControllerInstance.start(DEFAULT_DELEGATE_CONFIG);
-  if (!delegateStart.ok) {
-    reportBackgroundStartupError('delegate_auto_start_failed', new Error(delegateStart.error));
-  }
+  setTimeout(() => {
+    const delegateStart = delegateControllerInstance.start(DEFAULT_DELEGATE_CONFIG);
+    if (!delegateStart.ok) {
+      reportBackgroundStartupError('delegate_auto_start_failed', new Error(delegateStart.error));
+    }
+  }, 3_000);
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let envelope: RuntimeMessageEnvelope | undefined;

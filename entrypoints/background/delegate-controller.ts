@@ -16,6 +16,7 @@ import type { DelegateConfig, DelegateLoopResult } from '../../core/delegate/typ
 import { runDelegateLoop } from '../../core/delegate/loop';
 import { buildPromptAugmentation } from '../../core/prompt/augmentation';
 import type { DeepSeekAutomationClient } from '../../core/deepseek/automation-client-port';
+import { executeMcpToolCall, getMcpToolDescriptors } from '../../core/mcp/discovery';
 
 /** Dependencies the controller needs from the background context. */
 export interface DelegateControllerDependencies {
@@ -91,24 +92,38 @@ export function createDelegateController(deps: DelegateControllerDependencies): 
    * Claim a task via the MCP `web_task_claim` tool.
    *
    * The fork does not share a bridge with the dsh process; it reaches the
-   * bridge through the MCP endpoint, exactly as the model would inside a DS
-   * conversation. The claim blocks server-side until a task arrives or the
-   * claim wait elapses, so this call naturally idles when the queue is empty.
+   * bridge through the MCP endpoint. The claim blocks server-side until a task
+   * arrives or the claim wait elapses, so this call naturally idles when the
+   * queue is empty.
+   *
+   * The tool descriptor is looked up from the MCP server config each time, so
+   * a server added after the loop starts is found on the next claim.
    * @param signal - cancellation for the claim.
    * @returns the claimed task, or undefined when none arrives.
    */
   async function claimTask(signal: AbortSignal): Promise<ClaimedTask | undefined> {
     try {
-      const result = await deps.executeToolCall(
-        { name: 'web_task_claim', arguments: {}, payload: {}, provider: { kind: 'mcp' }, raw: '<web_task_claim>{}</web_task_claim>' } as unknown as ToolCall,
-        { signal, idempotencyKey: `delegate-claim-${Date.now()}` },
-      );
+      const descriptors = await getMcpToolDescriptors();
+      const descriptor = descriptors.find((d) => d.name === 'web_task_claim');
+      if (descriptor === undefined) return undefined;
+
+      const call: ToolCall = {
+        name: 'web_task_claim',
+        arguments: {},
+        payload: {},
+        provider: descriptor.provider,
+        descriptorId: descriptor.id,
+      } as unknown as ToolCall;
+
+      const result = await executeMcpToolCall(call, descriptor, {
+        signal,
+        timeoutMs: 60_000,
+        maxResultBytes: 64_000,
+      });
       if (result.ok !== true) return undefined;
-      // The MCP tool result carries text content; extract the task from it.
-      const text = typeof result.detail === 'string' ? result.detail : '';
+      const text = typeof result.detail === 'string' ? result.detail : (typeof result.summary === 'string' ? result.summary : '');
       return parseClaimedTask(text);
     } catch {
-      // A transport failure during claim is not fatal: the loop retries.
       return undefined;
     }
   }

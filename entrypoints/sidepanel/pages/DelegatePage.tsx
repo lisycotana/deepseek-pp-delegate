@@ -20,9 +20,9 @@ type StartResult = { ok: true; runId: string } | { ok: false; error: string };
 /**
  * The Delegate sub-page: a visible control for the browser-side delegate loop.
  *
- * Replaces the DevTools-console `chrome.runtime.sendMessage({ type: 'START_DELEGATE' })`
- * incantation with a button. The model mode and web-search toggle travel in the
- * start payload, so a user picks them here rather than editing the console call.
+ * Replaces the DevTools-console START_DELEGATE incantation with a button. The
+ * model mode and web-search toggle travel in the start payload, so a user picks
+ * them here rather than editing the console call.
  */
 export default function DelegatePage(): React.ReactElement {
   const { t } = useI18n();

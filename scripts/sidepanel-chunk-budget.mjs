@@ -97,7 +97,10 @@ if (requestedBrowsers.some((browser) => !browser)) {
 // 125600 (cap raised below from 125500), all other chunks inside budget.
 // The initial shell is sidepanel.html's entry script plus every static modulepreload.
 const BASELINE = Object.freeze({
-  initialShell: { raw: 378_292, gzip: 115_558 },
+  // Delegate tab (DelegatePage) added a new sub-tab under Capabilities and
+  // the lazy chunk it pulls in grows the static modulepreload graph. Local
+  // Node-24 measurement: 381088 raw (+2796) / 116498 gzip (+940).
+  initialShell: { raw: 381_088, gzip: 116_498 },
   routeChunks: {
     ChatPage: { raw: 134_938, gzip: 40_056 },
     CapabilitiesPage: { raw: 160_137, gzip: 35_259 },
@@ -161,7 +164,7 @@ const BUDGET = Object.freeze({
     raw: BASELINE.initialShell.raw,
     gzip: BASELINE.initialShell.gzip + GZIP_ENCODER_VARIANCE_BYTES,
   },
-  firstChatScreen: { raw: 408_548, gzip: 125_600 },
+  firstChatScreen: { raw: 411_344, gzip: 126_538 },
   richRendererIncrement: { raw: 120_000, gzip: 36_000 },
   routeChunks: {
     ChatPage: { raw: 25_000, gzip: 8_000 },

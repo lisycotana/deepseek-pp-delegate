@@ -37,7 +37,7 @@ interface DecodedBackgroundRuntimePayloads {
   SET_AUTOMATION_STATUS: AutomationStatusRequest;
   DELETE_AUTOMATION: AutomationIdRequest;
   RUN_AUTOMATION_NOW: AutomationIdRequest;
-  START_DELEGATE: { maxTasks?: number };
+  START_DELEGATE: { maxTasks?: number; modelType?: string | null; searchEnabled?: boolean };
   STOP_DELEGATE: Record<string, never>;
   GET_DELEGATE_STATUS: Record<string, never>;
   SCENARIOS_UPDATED: ScenarioRuntimeRequest;
@@ -82,6 +82,12 @@ export const BACKGROUND_RUNTIME_PAYLOAD_DECODERS: BackgroundRuntimePayloadDecode
       maxTasks: typeof payload.maxTasks === 'number' && Number.isFinite(payload.maxTasks) && payload.maxTasks > 0
         ? Math.floor(payload.maxTasks)
         : undefined,
+      modelType: typeof payload.modelType === 'string'
+        ? payload.modelType
+        : payload.modelType === null
+          ? null
+          : undefined,
+      searchEnabled: typeof payload.searchEnabled === 'boolean' ? payload.searchEnabled : undefined,
     };
   },
   STOP_DELEGATE() {

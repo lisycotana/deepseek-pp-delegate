@@ -30,6 +30,8 @@ export function createDelegateHandlers(
     defineBackgroundPayloadRuntimeCommandHandler('START_DELEGATE', (payload: BackgroundRuntimeDecodedPayload<'START_DELEGATE'>) => {
       const config = { ...DEFAULT_DELEGATE_CONFIG };
       if (payload.maxTasks !== undefined) config.maxTasks = payload.maxTasks;
+      if (payload.modelType !== undefined) config.modelType = payload.modelType;
+      if (payload.searchEnabled !== undefined) config.searchEnabled = payload.searchEnabled;
       const result = deps.delegateController.start(config);
       return Promise.resolve(result);
     }),

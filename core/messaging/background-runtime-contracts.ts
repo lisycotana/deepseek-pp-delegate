@@ -129,7 +129,7 @@ export interface BackgroundRuntimeCommandContracts {
     response: AutomationRun | DomainFailure;
   };
   START_DELEGATE: {
-    request: { type: 'START_DELEGATE'; payload?: { maxTasks?: number } };
+    request: { type: 'START_DELEGATE'; payload?: { maxTasks?: number; modelType?: string | null; searchEnabled?: boolean } };
     response: { ok: true; runId: string } | { ok: false; error: string };
   };
   STOP_DELEGATE: {

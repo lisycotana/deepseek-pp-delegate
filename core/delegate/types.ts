@@ -48,6 +48,10 @@ export interface DelegateConfig {
   readonly toolLoopDepth: number;
   /** Locale for prompt augmentation. */
   readonly locale: string;
+  /** DS web model mode: 'default' | 'expert' | 'vision'. null = server default. */
+  readonly modelType: string | null;
+  /** Whether the delegate enables DeepSeek's web search per task. */
+  readonly searchEnabled: boolean;
 }
 
 export const DEFAULT_DELEGATE_CONFIG: DelegateConfig = {
@@ -60,6 +64,10 @@ export const DEFAULT_DELEGATE_CONFIG: DelegateConfig = {
   // the next task over inline; depth covers a multi-tool task.
   toolLoopDepth: 12,
   locale: 'zh-CN',
+  // 'default' is the standard chat mode. 'expert' enables deep thinking
+  // (DeepSeek-Reasoner); 'vision' enables multimodal. Set via config.
+  modelType: null,
+  searchEnabled: false,
 };
 
 /** Callbacks the loop needs from the background context. */

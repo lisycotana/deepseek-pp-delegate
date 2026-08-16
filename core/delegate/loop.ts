@@ -156,11 +156,11 @@ async function runOneTask(
     const initialTurn = await callbacks.deepSeekClient.submitPrompt({
       chatSessionId,
       parentMessageId: null,
-      modelType: null,
+      modelType: config.modelType,
       prompt: callbacks.buildPrompt(DELEGATE_BOOT_PROMPT, config.locale),
       refFileIds: [],
-      thinkingEnabled: false,
-      searchEnabled: false,
+      thinkingEnabled: config.modelType === 'expert',
+      searchEnabled: config.searchEnabled,
       clientHeaders,
       powHeaders,
     }, { ...context, signal: taskController.signal });
@@ -183,11 +183,11 @@ async function runOneTask(
         return callbacks.deepSeekClient.submitPrompt({
           chatSessionId,
           parentMessageId,
-          modelType: null,
+          modelType: config.modelType,
           prompt,
           refFileIds: [],
-          thinkingEnabled: false,
-          searchEnabled: false,
+          thinkingEnabled: config.modelType === 'expert',
+          searchEnabled: config.searchEnabled,
           clientHeaders,
           powHeaders: pow,
         }, { ...context, signal: taskController.signal });

@@ -84,6 +84,12 @@ export interface DelegateLoopCallbacks {
   readonly loadClientHeaders: () => Promise<Record<string, string> | null>;
   /** Build the prompt augmentation (memories, preset, project, tools). */
   readonly buildPrompt: (prompt: string, locale: string) => string;
+  /**
+   * Claim a task from the delegation queue. Blocks until a task arrives or the
+   * call times out. Implemented by the controller — in the fork this is an MCP
+   * `web_task_claim` call; in-process it reads the bridge directly.
+   */
+  readonly claimTask: (signal: AbortSignal) => Promise<{ id: string; prompt: string; label?: string; cwd?: string } | undefined>;
   /** Signal the loop was cancelled externally. */
   readonly signal: AbortSignal;
 }

@@ -230,6 +230,7 @@ import {
 } from '../core/deepseek/adapter';
 import { createDeepSeekAutomationClient } from '../core/deepseek/active-client';
 import { createDelegateController } from './background/delegate-controller';
+import { DEFAULT_DELEGATE_CONFIG } from '../core/delegate/types';
 import { submitOfficialDeepSeekStreaming } from '../core/deepseek/official-api';
 import { createDeepSeekConversationExportTransport } from '../core/deepseek/conversation-export';
 import {
@@ -301,6 +302,23 @@ const REFRESH_AUTH_MESSAGE = { type: 'REFRESH_DEEPSEEK_AUTH' } as const;
 const AUTOMATION_AUTH_TOKEN_MISSING_MESSAGE =
   'DeepSeek login token is missing. Refresh chat.deepseek.com or sign in again, then retry the automation.';
 const deepSeekAutomationClient = createDeepSeekAutomationClient();
+// The delegate controller is module-level so the SW startup hook can auto-start
+// it; the runtime handlers reference the same instance.
+const delegateControllerInstance = createDelegateController({
+  deepSeekClient: deepSeekAutomationClient,
+  loadClientHeaders: () => loadOrRefreshClientHeaders(),
+  getToolDescriptors: (locale: string) => getRuntimeToolDescriptors(locale as 'en' | 'zh-CN'),
+  executeToolCall: (call, options) => executeBackgroundRuntimeToolCall(
+    call,
+    'automation',
+    {
+      signal: options.signal,
+      idempotencyKey: options.idempotencyKey,
+      assertActive: () => undefined,
+      trustedCapabilityScopeId: `delegate:${options.idempotencyKey}`,
+    },
+  ),
+});
 const externalPayloadAuthorizationCache = new ExternalPayloadAuthorizationCache();const {
   executeToolCall: executeRuntimeToolCall,
   getAuthorizationDescriptors: getRuntimeAuthorizationDescriptors,
@@ -671,21 +689,7 @@ const runtimeCommandRegistry = createRuntimeCommandRegistry({
         refreshScenarioMenus: createContextMenus,
       },
       delegate: {
-        delegateController: createDelegateController({
-          deepSeekClient: deepSeekAutomationClient,
-          loadClientHeaders: () => loadOrRefreshClientHeaders(),
-          getToolDescriptors: (locale: string) => getRuntimeToolDescriptors(locale as 'en' | 'zh-CN'),
-          executeToolCall: (call, options) => executeBackgroundRuntimeToolCall(
-            call,
-            'automation',
-            {
-              signal: options.signal,
-              idempotencyKey: options.idempotencyKey,
-              assertActive: () => undefined,
-              trustedCapabilityScopeId: `delegate:${options.idempotencyKey}`,
-            },
-          ),
-        }),
+        delegateController: delegateControllerInstance,
       },
     }),
   ],
@@ -751,6 +755,15 @@ export default defineBackground(() => {
     .then(() => scanDueAutomationsFromWake()
       .catch((error) => reportBackgroundStartupError('automation_startup_scan_failed', error)))
     .catch(acknowledgeReportedSyncRecoveryFailure);
+
+  // Auto-start the delegate loop on SW wake. The loop idles patiently (claim
+  // blocks server-side) when no work is queued, so starting it unconditionally
+  // costs nothing when idle. When the SW is killed and wakes again, this
+  // re-starts the loop automatically — no manual button press needed.
+  const delegateStart = delegateControllerInstance.start(DEFAULT_DELEGATE_CONFIG);
+  if (!delegateStart.ok) {
+    reportBackgroundStartupError('delegate_auto_start_failed', new Error(delegateStart.error));
+  }
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let envelope: RuntimeMessageEnvelope | undefined;

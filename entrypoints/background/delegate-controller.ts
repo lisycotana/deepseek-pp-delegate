@@ -51,6 +51,33 @@ interface ActiveRun {
   result: Promise<DelegateLoopResult>;
 }
 
+/** A claimed task carried by `claimTask`. */
+interface ClaimedTask {
+  id: string;
+  prompt: string;
+  label?: string;
+  cwd?: string;
+}
+
+/**
+ * Parse the text returned by `web_task_claim` into a task object.
+ *
+ * The MCP tool returns a text block whose body is a human-readable task
+ * description containing the task id and prompt. This extracts the structured
+ * fields. When the text is "No task available." the claim returned nothing.
+ * @param text - the claim tool's result text.
+ * @returns the parsed task, or undefined when no task was available.
+ */
+function parseClaimedTask(text: string): ClaimedTask | undefined {
+  if (text === '' || text.includes('No task available')) return undefined;
+  const idMatch = /task-[0-9a-f-]+/.exec(text);
+  if (idMatch === null) return undefined;
+  // The prompt lives between `--- task ---` and `--- end task ---` markers.
+  const taskMatch = text.match(/--- task ---\n?([\s\S]*?)--- end task ---/);
+  const prompt = taskMatch !== null ? taskMatch[1].trim() : text;
+  return { id: idMatch[0], prompt };
+}
+
 /**
  * Create a delegate controller bound to one set of dependencies.
  * @param deps - the background-context dependencies.
@@ -61,11 +88,37 @@ export function createDelegateController(deps: DelegateControllerDependencies): 
   let status: DelegateStatus = { running: false, tasksCompleted: 0 };
 
   /**
+   * Claim a task via the MCP `web_task_claim` tool.
+   *
+   * The fork does not share a bridge with the dsh process; it reaches the
+   * bridge through the MCP endpoint, exactly as the model would inside a DS
+   * conversation. The claim blocks server-side until a task arrives or the
+   * claim wait elapses, so this call naturally idles when the queue is empty.
+   * @param signal - cancellation for the claim.
+   * @returns the claimed task, or undefined when none arrives.
+   */
+  async function claimTask(signal: AbortSignal): Promise<ClaimedTask | undefined> {
+    try {
+      const result = await deps.executeToolCall(
+        { name: 'web_task_claim', arguments: {}, payload: {}, provider: { kind: 'mcp' }, raw: '<web_task_claim>{}</web_task_claim>' } as unknown as ToolCall,
+        { signal, idempotencyKey: `delegate-claim-${Date.now()}` },
+      );
+      if (result.ok !== true) return undefined;
+      // The MCP tool result carries text content; extract the task from it.
+      const text = typeof result.detail === 'string' ? result.detail : '';
+      return parseClaimedTask(text);
+    } catch {
+      // A transport failure during claim is not fatal: the loop retries.
+      return undefined;
+    }
+  }
+
+  /**
    * Start a delegate loop. Refuses if one is already running.
    * @param config - bounds for the loop.
    * @returns `{ ok, runId }` or `{ ok: false, error }`.
    */
-  function start(config: DelegateConfig): { ok: true; runId: string } | { ok: false; error: string } {
+  function start(config: DelegateConfig): { ok: true; runId: string } | { ok: false, error: string } {
     if (active !== null) {
       return { ok: false, error: 'A delegate loop is already running. Stop it first.' };
     }
@@ -85,6 +138,7 @@ export function createDelegateController(deps: DelegateControllerDependencies): 
         // The config locale is a free string; the augmentation accepts the two
         // supported locales and falls back to default for anything else.
         buildPromptAugmentation(prompt, { locale: locale as 'en' | 'zh-CN' }).augmented,
+      claimTask,
       signal: controller.signal,
     };
 

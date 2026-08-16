@@ -14,6 +14,12 @@
  * conversations. The user's existing manual conversations are never touched
  * because the loop only ever operates on sessions it created.
  *
+ * The claim happens at the LOOP level, not inside a DS conversation. This is the
+ * key difference from the automation runner: a task is claimed first, then a
+ * conversation is created with the mode that fits the task. DeepSeek's web mode
+ * is fixed at conversation creation and cannot switch mid-conversation, so the
+ * mode must be chosen from the task text before the conversation exists.
+ *
  * @module core/delegate/loop
  */
 
@@ -21,6 +27,7 @@ import type { ModelTurn } from '../deepseek/automation-client-port';
 import type { ToolCall, ToolExecutionRecord, ToolResult } from '../types';
 import { extractToolCalls } from '../interceptor/tool-parser';
 import { runToolContinuationLoop } from '../tool-loop/engine';
+import { prefelModelType } from './model-pref';
 import type {
   DelegateConfig,
   DelegateLoopCallbacks,
@@ -32,47 +39,63 @@ import type {
 const DETAIL_MAX = 4_000;
 const OUTPUT_MAX = 8_000;
 
+/** Stop reasons a delegate may report. */
+const REPORTABLE_STOP_REASONS = ['completed', 'error', 'refusal', 'max-tokens'];
+
 /**
- * The first prompt sent to each fresh DS session.
- *
- * The model reads this before its first tool call, so the call format and the
- * loop contract travel here. Browser-side clients execute the direct
- * tool-name XML tag form and silently ignore anything else, so a model that
- * improvises a wrapper produces a turn with no tool call and the task stalls;
- * the reminder names the wrapper forms to avoid.
+ * Render the call format a delegate must use, with the task's own id filled in.
  */
-const DELEGATE_BOOT_PROMPT = [
-  '你是 dsh 的远程执行代理。dsh 会派任务给你，你做完交回去。',
-  '',
-  '【工具调用格式 —— 最重要】',
-  '只能用「标签名就是工具名」的 XML，标签内是 JSON：',
-  '<web_task_claim>{}</web_task_claim>',
-  '<pwsh>{"command":"Get-ChildItem \'G:\\\\dsh-plugins\'"}</pwsh>',
-  '<web_task_settle>{"taskId":"task-xxx","text":"结果","stopReason":"completed"}</web_task_settle>',
-  '',
-  '以下写法一律无效，会被忽略，任务会卡死：',
-  '- 包装标签如 <rwscript><name>pwsh</name>...</rwscript>',
-  '- <invoke name="pwsh">...</invoke>',
-  '- 把工具调用写在 markdown 代码块里',
-  '',
-  '【循环】',
-  '1. 发 <web_task_claim>{}</web_task_claim> 领任务。',
-  '2. 返回「No task available.」就立刻再发一次。',
-  '3. 领到任务后，用 pwsh / glob / read / write / edit / grep 等工具完成它。',
-  '4. 做完发 web_task_settle，taskId 用任务里给的那个，text 写完整结果。',
-  '5. settle 的返回值里通常直接带着下一个任务，有的话接着做；没有就回第 1 步。',
-  '',
-  '每一轮回复都必须包含至少一个工具标签。不要问「要继续吗」，直接调。',
-  '失败也要交：用 stopReason error，把原因写进 text。绝不能不交。',
-].join('\n');
+function settleInstruction(taskId: string): string {
+  return [
+    'When the work is done, report it with exactly this call — tag name is the tool name, body is JSON:',
+    '',
+    `<web_task_settle>{"taskId": "${taskId}", "text": "<your full result here>", "stopReason": "completed"}</web_task_settle>`,
+    '',
+    'If the work failed, send the same call with "stopReason": "error" and put the reason in text.',
+    'Do not wrap the call in <invoke>, <tool_call>, <rwscript>, or a markdown code fence — those are ignored and the task will hang.',
+  ].join('\n');
+}
+
+/**
+ * The prompt sent to the fresh DS session, carrying the task and the call format.
+ *
+ * The task text travels here because that is where the model reads it: right
+ * before its first tool call. The call format and the loop contract travel
+ * alongside it so a model that improvises a wrapper form is warned at the
+ * point of use.
+ */
+function buildTaskPrompt(task: { id: string; prompt: string; label?: string; cwd?: string }): string {
+  const lines = [
+    '你是 dsh 的远程执行代理。下面是你的任务，完成后用 web_task_settle 交回结果。',
+    '',
+    '【工具调用格式 —— 最重要】',
+    '只能用「标签名就是工具名」的 XML，标签内是 JSON：',
+    '<pwsh>{"command":"Get-ChildItem \'G:\\\\dsh-plugins\'"}</pwsh>',
+    '<web_task_settle>{"taskId":"task-xxx","text":"结果","stopReason":"completed"}</web_task_settle>',
+    '',
+    '以下写法一律无效，会被忽略，任务会卡死：',
+    '- 包装标签如 <rwscript><name>pwsh</name>...</rwscript>',
+    '- <invoke name="pwsh">...</invoke>',
+    '- 把工具调用写在 markdown 代码块里',
+    '',
+    '【你的任务】',
+    task.prompt,
+    '',
+  ];
+  if (task.cwd !== undefined) {
+    lines.push(`工作目录：${task.cwd}`, '');
+  }
+  lines.push(settleInstruction(task.id));
+  return lines.join('\n');
+}
 
 /**
  * Run the delegate loop until cancelled, errored, or the task cap is hit.
  *
- * Each iteration is one task: a fresh session is created, the boot prompt is
- * submitted, the tool-continuation loop runs, and the session is deleted in a
- * finally block regardless of outcome. A task that fails to settle is still
- * cleaned up; the dsh side times out its own claim and moves on.
+ * Each iteration: claim a task from the bridge → create a fresh DS session
+ * with the mode inferred from the task → run the tool loop → the model settles
+ * → delete the session. Claiming first means the loop idles patiently when no
+ * work is queued, and the mode matches the task.
  * @param config - bounds for the loop.
  * @param callbacks - the background-context dependencies.
  * @returns the loop result with per-task records.
@@ -83,9 +106,6 @@ export async function runDelegateLoop(
 ): Promise<DelegateLoopResult> {
   const tasks: DelegateTaskRecord[] = [];
   const startedAt = Date.now();
-  // Track consecutive DS-API failures. Without this, a structural problem (auth,
-  // PoW, rate limit) makes submitPrompt throw every iteration, and the loop
-  // spins to the maxTasks cap — the "100 tasks completed in a second" symptom.
   let consecutiveErrors = 0;
   const MAX_CONSECUTIVE_ERRORS = 3;
 
@@ -94,11 +114,24 @@ export async function runDelegateLoop(
       return finish('idle', tasks, startedAt);
     }
 
-    const taskRecord = await runOneTask(config, callbacks).catch((error) => {
-      // A task-level failure does not abort the loop: the next iteration gets a
-      // fresh session and a fresh claim. Only auth loss or cancellation stops it.
+    // Claim a task FIRST, before touching the DS API. A task in the queue is
+    // proof that real work exists; only then do we spend a DS conversation on
+    // it. This lets the loop idle patiently when no work is queued, and lets
+    // us pick the model mode from the task text before creating the session.
+    const claimed = await callbacks.claimTask(callbacks.signal).catch(() => undefined);
+    if (claimed === undefined) {
+      // No task arrived during the wait, or the claim was interrupted. Loop
+      // back and wait again unless we were cancelled.
+      if (callbacks.signal.aborted) {
+        return finish('cancelled', tasks, startedAt);
+      }
+      continue;
+    }
+
+    const taskRecord = await runOneTask(config, callbacks, claimed).catch((error) => {
+      consecutiveErrors += 1;
       return {
-        taskId: null,
+        taskId: claimed.id,
         chatSessionId: '',
         startedAt: Date.now(),
         settledAt: Date.now(),
@@ -108,20 +141,14 @@ export async function runDelegateLoop(
     });
     tasks.push(taskRecord);
 
-    // Count consecutive DS-API failures; stop before burning through maxTasks
-    // on a structural problem. A non-error task resets the streak.
-    if (taskRecord.stopReason === 'error') {
-      consecutiveErrors += 1;
-      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
-        return finish('error', tasks, startedAt,
-          `Stopped after ${String(consecutiveErrors)} consecutive task failures. Last error: ${taskRecord.summary}`);
-      }
-    } else {
+    if (taskRecord.stopReason !== 'error') {
       consecutiveErrors = 0;
+    } else if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+      return finish('error', tasks, startedAt,
+        `Stopped after ${String(consecutiveErrors)} consecutive task failures. Last error: ${taskRecord.summary}`);
     }
 
-    // Auth loss is terminal: retrying immediately would fail the same way.
-    if (taskRecord.stopReason === 'aborted' && callbacks.signal.aborted) {
+    if (callbacks.signal.aborted) {
       return finish('cancelled', tasks, startedAt);
     }
   }
@@ -130,14 +157,21 @@ export async function runDelegateLoop(
 }
 
 /**
- * Run one task: create session, boot, tool loop, settle, delete.
+ * Run one task: create session, submit task prompt, tool loop, settle, delete.
+ *
+ * The task is already claimed. The model mode is inferred from the task text:
+ * DeepSeek's web mode is fixed at conversation creation, so the mode must be
+ * chosen before the session exists. `config.modelType` is the fallback when the
+ * task text gives no signal; `config.searchEnabled` is the fallback for search.
  * @param config - bounds for the loop.
  * @param callbacks - the background-context dependencies.
+ * @param claimed - the task claimed from the bridge.
  * @returns the task record.
  */
 async function runOneTask(
   config: DelegateConfig,
   callbacks: DelegateLoopCallbacks,
+  claimed: { id: string; prompt: string; label?: string; cwd?: string },
 ): Promise<DelegateTaskRecord> {
   const clientHeaders = await callbacks.loadClientHeaders();
   if (clientHeaders === null) {
@@ -147,13 +181,19 @@ async function runOneTask(
   const startedAt = Date.now();
   const context = { signal: callbacks.signal };
 
+  // Infer the model mode from the task text. The config values are the
+  // fallback when the task gives no signal; a per-task signal overrides.
+  const pref = prefelModelType(claimed.prompt);
+  const modelType = pref.modelType ?? config.modelType;
+  const searchEnabled = pref.searchEnabled || config.searchEnabled;
+  const thinkingEnabled = modelType === 'expert';
+
   // A fresh session per task is the isolation contract. The id is never
   // persisted to the automation cursor, so a crashed loop leaves no stale
   // pointer for a retry to resume.
   const chatSessionId = await callbacks.deepSeekClient.createChatSession(clientHeaders, context);
   callbacks.signal.throwIfAborted();
 
-  let taskId: string | null = null;
   let stopReason: DelegateTaskRecord['stopReason'] = 'completed';
   let summary = '';
 
@@ -165,19 +205,21 @@ async function runOneTask(
   }, config.perTaskTimeoutMs);
 
   try {
-    // The boot prompt teaches the loop and the call format. The model's first
-    // action is to call web_task_claim, which holds open until dsh queues work.
     const powHeaders = await callbacks.deepSeekClient.createPowHeaders(clientHeaders, context);
     callbacks.signal.throwIfAborted();
 
+    // Submit the task prompt directly. The task is already claimed, so the
+    // model does not call web_task_claim — it sees the task text and starts
+    // working. It calls dsh tools over MCP when it needs the machine, then
+    // calls web_task_settle with the result.
     const initialTurn = await callbacks.deepSeekClient.submitPrompt({
       chatSessionId,
       parentMessageId: null,
-      modelType: config.modelType,
-      prompt: callbacks.buildPrompt(DELEGATE_BOOT_PROMPT, config.locale),
+      modelType,
+      prompt: callbacks.buildPrompt(buildTaskPrompt(claimed), config.locale),
       refFileIds: [],
-      thinkingEnabled: config.modelType === 'expert',
-      searchEnabled: config.searchEnabled,
+      thinkingEnabled,
+      searchEnabled,
       clientHeaders,
       powHeaders,
     }, { ...context, signal: taskController.signal });
@@ -200,11 +242,11 @@ async function runOneTask(
         return callbacks.deepSeekClient.submitPrompt({
           chatSessionId,
           parentMessageId,
-          modelType: config.modelType,
+          modelType,
           prompt,
           refFileIds: [],
-          thinkingEnabled: config.modelType === 'expert',
-          searchEnabled: config.searchEnabled,
+          thinkingEnabled,
+          searchEnabled,
           clientHeaders,
           powHeaders: pow,
         }, { ...context, signal: taskController.signal });
@@ -238,7 +280,7 @@ async function runOneTask(
   }
 
   return {
-    taskId,
+    taskId: claimed.id,
     chatSessionId,
     startedAt,
     settledAt: Date.now(),
@@ -318,6 +360,7 @@ function clampText(value: string | undefined, max: number): string | undefined {
  * @param stopReason - why the loop stopped.
  * @param tasks - per-task records.
  * @param startedAt - when the loop began.
+ * @param error - optional error message.
  * @returns the loop result.
  */
 function finish(

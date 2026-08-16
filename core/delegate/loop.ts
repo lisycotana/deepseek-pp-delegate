@@ -83,6 +83,11 @@ export async function runDelegateLoop(
 ): Promise<DelegateLoopResult> {
   const tasks: DelegateTaskRecord[] = [];
   const startedAt = Date.now();
+  // Track consecutive DS-API failures. Without this, a structural problem (auth,
+  // PoW, rate limit) makes submitPrompt throw every iteration, and the loop
+  // spins to the maxTasks cap — the "100 tasks completed in a second" symptom.
+  let consecutiveErrors = 0;
+  const MAX_CONSECUTIVE_ERRORS = 3;
 
   while (!callbacks.signal.aborted) {
     if (config.maxTasks > 0 && tasks.length >= config.maxTasks) {
@@ -102,6 +107,18 @@ export async function runDelegateLoop(
       } satisfies DelegateTaskRecord;
     });
     tasks.push(taskRecord);
+
+    // Count consecutive DS-API failures; stop before burning through maxTasks
+    // on a structural problem. A non-error task resets the streak.
+    if (taskRecord.stopReason === 'error') {
+      consecutiveErrors += 1;
+      if (consecutiveErrors >= MAX_CONSECUTIVE_ERRORS) {
+        return finish('error', tasks, startedAt,
+          `Stopped after ${String(consecutiveErrors)} consecutive task failures. Last error: ${taskRecord.summary}`);
+      }
+    } else {
+      consecutiveErrors = 0;
+    }
 
     // Auth loss is terminal: retrying immediately would fail the same way.
     if (taskRecord.stopReason === 'aborted' && callbacks.signal.aborted) {
@@ -307,6 +324,7 @@ function finish(
   stopReason: DelegateLoopResult['stopReason'],
   tasks: readonly DelegateTaskRecord[],
   startedAt: number,
+  error?: string,
 ): DelegateLoopResult {
-  return { stopReason, tasks, stoppedAt: Date.now() };
+  return { stopReason, tasks, stoppedAt: Date.now(), error };
 }

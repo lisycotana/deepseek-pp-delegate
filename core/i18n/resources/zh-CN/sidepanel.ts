@@ -514,6 +514,25 @@ export const sidepanel = {
       browser: '浏览器',
       preset: '预设',
       automation: '自动化',
+      delegate: '委派',
+    },
+  },
+  delegatePage: {
+    title: '网页委派',
+    description: '把 DeepSeek 网页会话变成执行代理：领取来自 dsh / Claude CLI 等客户端的委派任务，在新建对话里执行，完成后删除。不消耗 API 额度。',
+    modelMode: '模型模式',
+    webSearch: '联网搜索',
+    start: '启动委派',
+    stop: '停止委派',
+    status: {
+      running: '运行中',
+      stopped: '已停止',
+    },
+    tasksCompleted: '已完成 {count} 个任务',
+    modes: {
+      default: '标准模式（普通对话）',
+      expert: '深度思考（Reasoner）',
+      vision: '识图（多模态）',
     },
   },
   browserControlPage: {

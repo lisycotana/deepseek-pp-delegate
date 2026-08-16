@@ -514,6 +514,25 @@ export const sidepanel = {
       browser: 'Browser',
       preset: 'Presets',
       automation: 'Automation',
+      delegate: 'Delegate',
+    },
+  },
+  delegatePage: {
+    title: 'Web Delegate',
+    description: 'Turn a DeepSeek web session into an execution worker: claim tasks delegated from dsh / Claude CLI, run each in a fresh chat session, delete it when done. No API quota spent.',
+    modelMode: 'Model mode',
+    webSearch: 'Web search',
+    start: 'Start delegate',
+    stop: 'Stop delegate',
+    status: {
+      running: 'Running',
+      stopped: 'Stopped',
+    },
+    tasksCompleted: '{count} task(s) completed',
+    modes: {
+      default: 'Standard (normal chat)',
+      expert: 'Deep thinking (Reasoner)',
+      vision: 'Vision (multimodal)',
     },
   },
   browserControlPage: {

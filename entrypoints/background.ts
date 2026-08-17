@@ -231,6 +231,7 @@ import {
 import { createDeepSeekAutomationClient } from '../core/deepseek/active-client';
 import { createDelegateController } from './background/delegate-controller';
 import { DEFAULT_DELEGATE_CONFIG } from '../core/delegate/types';
+import { createCredentialPusher, DEFAULT_PUSHER_CONFIG } from '../core/deepseek/credential-pusher';
 import { submitOfficialDeepSeekStreaming } from '../core/deepseek/official-api';
 import { createDeepSeekConversationExportTransport } from '../core/deepseek/conversation-export';
 import {
@@ -767,6 +768,30 @@ export default defineBackground(() => {
       reportBackgroundStartupError('delegate_auto_start_failed', new Error(delegateStart.error));
     }
   }, 3_000);
+
+  // Start the credential pusher: pushes DS cookies + bearer to the
+  // deepseek-free-api proxy every 5 minutes so it can call DS API directly.
+  // Reads proxy URL + optional token from chrome.storage.local (set by the
+  // DelegatePage UI). Defaults to localhost:3000.
+  setTimeout(() => {
+    chrome.storage.local.get(['dshDelegateProxyUrl', 'dshDelegatePushToken']).then((settings) => {
+      const proxyUrl = (settings.dshDelegateProxyUrl as string | undefined) || DEFAULT_PUSHER_CONFIG.proxyUrl;
+      const pushToken = (settings.dshDelegatePushToken as string | undefined) || undefined;
+      const pusher = createCredentialPusher({
+        proxyUrl,
+        pushToken,
+        intervalMs: DEFAULT_PUSHER_CONFIG.intervalMs,
+      });
+      pusher.start();
+    }).catch(() => {
+      // Storage read failed — start with defaults.
+      const pusher = createCredentialPusher({
+        proxyUrl: DEFAULT_PUSHER_CONFIG.proxyUrl,
+        intervalMs: DEFAULT_PUSHER_CONFIG.intervalMs,
+      });
+      pusher.start();
+    });
+  }, 5_000);
 
   chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
     let envelope: RuntimeMessageEnvelope | undefined;

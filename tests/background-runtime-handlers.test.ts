@@ -33,6 +33,7 @@ const R44_COMMANDS = [
   'START_DELEGATE',
   'STOP_DELEGATE',
   'GET_DELEGATE_STATUS',
+  'GET_DS_CREDENTIALS',
   'SCENARIOS_UPDATED',
 ] as const;
 
@@ -53,6 +54,7 @@ const R44_PAYLOAD_COMMANDS = [
   'START_DELEGATE',
   'STOP_DELEGATE',
   'GET_DELEGATE_STATUS',
+  'GET_DS_CREDENTIALS',
   'SCENARIOS_UPDATED',
 ] as const;
 
@@ -66,7 +68,7 @@ const context: RuntimeMessageContext = {
 };
 
 describe('R4.4 background runtime closure', () => {
-  it('owns exactly the final 20 handlers and 17 receiving decoders', () => {
+  it('owns exactly the final 21 handlers and 18 receiving decoders', () => {
     const handlers = createBackgroundRuntimeHandlers(createDependencies());
     expect(handlers.map((handler) => handler.type).sort()).toEqual([...R44_COMMANDS].sort());
     expect(Object.keys(BACKGROUND_RUNTIME_PAYLOAD_DECODERS).sort())

@@ -40,6 +40,7 @@ interface DecodedBackgroundRuntimePayloads {
   START_DELEGATE: { maxTasks?: number; modelType?: string | null; searchEnabled?: boolean };
   STOP_DELEGATE: Record<string, never>;
   GET_DELEGATE_STATUS: Record<string, never>;
+  GET_DS_CREDENTIALS: Record<string, never>;
   SCENARIOS_UPDATED: ScenarioRuntimeRequest;
 }
 
@@ -94,6 +95,9 @@ export const BACKGROUND_RUNTIME_PAYLOAD_DECODERS: BackgroundRuntimePayloadDecode
     return {};
   },
   GET_DELEGATE_STATUS() {
+    return {};
+  },
+  GET_DS_CREDENTIALS() {
     return {};
   },
   SCENARIOS_UPDATED: decodeScenarioRuntimeRequest,

@@ -86,6 +86,7 @@ DeepSeek++ requests these Chrome permissions for the following purposes:
 - `debugger`: attach to a user-selected browser tab only when Browser Control is enabled, so DeepSeek++ can read an Accessibility Tree snapshot and perform user-visible browser actions requested through `browser_*` tools.
 - `tabs`: list browser tabs and select the target tab for Browser Control. Tab group names may be shown when the browser exposes them without an additional required permission.
 - `identity`: start the user-approved Google Drive or OneDrive OAuth sign-in flow when the user enables one of those sync providers.
+- `cookies`: read DeepSeek session cookies from chat.deepseek.com when an external API proxy requests credentials via the delegate bridge. Cookies are returned only to a local authenticated caller and never stored or transmitted elsewhere.
 - `sidePanel`: provide the extension management UI in Chrome's side panel.
 - `<all_urls>` content script match: show the optional DS++ Chat floating launcher on normal web pages. The launcher skips DeepSeek pages to avoid duplicate UI, can be turned off from Appearance settings, and does not automatically read or send page body content.
 - `*://chat.deepseek.com/*`: run on the DeepSeek web app so the extension can apply user-selected context, render tool results, export user-requested conversation history, support local downloads, and support automation inside DeepSeek conversations.

@@ -188,6 +188,7 @@ export const RUNTIME_COMMAND_CONTRACTS = {
   START_DELEGATE: typedCommand('payload-decoded', 'value', 'background-error', 'live-only'),
   STOP_DELEGATE: typedCommand('payload-decoded', 'ack', 'background-error', 'live-only'),
   GET_DELEGATE_STATUS: typedCommand('payload-decoded', 'value', 'background-error', 'live-only'),
+  GET_DS_CREDENTIALS: typedCommand('payload-decoded', 'value', 'background-error', 'live-only'),
   SCENARIOS_UPDATED: typedCommand('payload-decoded', 'value', 'background-error', 'live-only', 'optional'),
   TOOL_CALL_EXECUTED: command('client-only', 'payload-cast', 'unrouted', 'none', 'declared-only'),
   MEMORIES_UPDATED: command('client-only', 'none', 'unrouted', 'none', 'declared-only', 'none'),

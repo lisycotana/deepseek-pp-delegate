@@ -1,5 +1,5 @@
 /**
- * Runtime command handlers for the delegate loop: start, stop, and status.
+ * Runtime command handlers for the delegate loop and credential export.
  *
  * @module entrypoints/background/delegate-handlers
  */
@@ -12,6 +12,7 @@ import type { BackgroundRuntimeDecodedPayload } from '../../core/messaging/backg
 import { defineBackgroundPayloadRuntimeCommandHandler } from './runtime-handler';
 import { DEFAULT_DELEGATE_CONFIG } from '../../core/delegate/types';
 import type { DelegateController } from './delegate-controller';
+import { exportDsCredentials } from '../../core/deepseek/credential-export';
 
 /** Dependencies the handlers need. */
 export interface DelegateHandlerDependencies {
@@ -41,5 +42,12 @@ export function createDelegateHandlers(
     definePayloadlessRuntimeCommandHandler('GET_DELEGATE_STATUS', () => (
       Promise.resolve(deps.delegateController.getStatus())
     )),
+    definePayloadlessRuntimeCommandHandler('GET_DS_CREDENTIALS', async () => {
+      const creds = await exportDsCredentials();
+      if (creds === null) {
+        return { ok: false as const, error: 'No DS login found. Sign in at chat.deepseek.com and retry.' };
+      }
+      return { ok: true as const, ...creds };
+    }),
   ]);
 }

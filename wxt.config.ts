@@ -60,7 +60,7 @@ export function createManifest(env: ConfigEnv): UserManifest {
   // The providers' fixed API hosts are declared as required host_permissions below
   // so the background service worker can fetch them without a runtime permission
   // request; WebDAV URLs are arbitrary and stay in optional_host_permissions.
-  const chromiumPermissions = [...basePermissions, 'offscreen', 'debugger', 'tabs', 'identity'];
+  const chromiumPermissions = [...basePermissions, 'offscreen', 'debugger', 'tabs', 'identity', 'cookies'];
   const firefoxPermissions = [...basePermissions, 'identity'];
 
   return {

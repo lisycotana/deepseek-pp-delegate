@@ -23,6 +23,7 @@ const pathAllowlist = new Map([
   ['core/export/schema.ts', 'conversation export validation diagnostics are internal data-contract errors'],
   ['core/export/service.ts', 'conversation export progress copy is surfaced through background export flow and covered by the explicit export exception until export progress takes a locale parameter'],
   ['core/delegate/loop.ts', 'delegate boot prompt and continuation prompt are source-authored model instructions, not user-facing UI copy'],
+  ['core/delegate/model-pref.ts', 'delegate model-preference keywords are source-authored prompt-matching patterns, not user-facing UI copy'],
   ['core/i18n/resources/zh-CN', 'zh-CN locale resources (per-section modules; background bundle imports only its section subset)'],
   ['core/mcp/client.ts', 'MCP low-level tool-result diagnostics remain in the protocol layer; localized MCP UI state is covered separately'],
   ['core/mcp/discovery.ts', 'MCP low-level execution diagnostics remain in the protocol layer; localized MCP UI state is covered separately'],

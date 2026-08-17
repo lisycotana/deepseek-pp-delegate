@@ -140,6 +140,10 @@ export interface BackgroundRuntimeCommandContracts {
     request: { type: 'GET_DELEGATE_STATUS' };
     response: { running: boolean; runId?: string; tasksCompleted: number; lastError?: string };
   };
+  GET_DS_CREDENTIALS: {
+    request: { type: 'GET_DS_CREDENTIALS' };
+    response: { ok: true; cookie: string; bearer: string; userAgent: string } | { ok: false; error: string };
+  };
   SCENARIOS_UPDATED: {
     request: { type: 'SCENARIOS_UPDATED'; payload?: ScenarioRuntimeRequest };
     response: Ack | { ok: true; scenarios: ScenarioConfig[] };
